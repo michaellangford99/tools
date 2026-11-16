@@ -41,6 +41,18 @@ target_include_directories(imgui PUBLIC
 
 target_link_libraries(imgui PUBLIC glfw)
 
+#---- ImGuiFileDialog ----
+
+FetchContent_Declare(
+    imgui_file_dialog
+    GIT_REPOSITORY https://github.com/aiekick/ImGuiFileDialog.git
+    GIT_TAG        v0.6.7
+    GIT_SHALLOW    TRUE
+)
+
+FetchContent_MakeAvailable(imgui_file_dialog)
+target_link_libraries(ImGuiFileDialog PUBLIC imgui)
+
 #---- IMPlot ----
 
 FetchContent_Declare(
@@ -111,66 +123,16 @@ FetchContent_MakeAvailable(xtensor)
 
 #-------------------------------------------------
 
-file(GLOB_RECURSE WAVE_PLOT_SOURCES
-    "${PROJECT_SOURCE_DIR}/src/wave_plot/*.cpp"
+add_library(glad STATIC
+    "${PROJECT_SOURCE_DIR}/src/gl_lib/glad.c"
 )
 
-# add glad.c - a generated file.
-list(APPEND WAVE_PLOT_SOURCES
-    "${PROJECT_SOURCE_DIR}/src/wave_plot/glad.c"
+target_include_directories(glad PUBLIC
+    "${PROJECT_SOURCE_DIR}/include"
+)
+target_link_libraries(glad PUBLIC
+    ${CMAKE_DL_LIBS}
 )
 
-add_library(wave_plot_lib STATIC
-    ${WAVE_PLOT_SOURCES}
-)
-
-target_include_directories(wave_plot_lib PUBLIC
-    ${PROJECT_SOURCE_DIR}/src
-    ${PROJECT_SOURCE_DIR}/src/wave_plot
-    ${PROJECT_SOURCE_DIR}/include
-    ${PROJECT_SOURCE_DIR}/include/glad
-    ${PROJECT_SOURCE_DIR}/include/stb_image
-    ${PROJECT_SOURCE_DIR}/include/KHR
-)
-
-target_include_directories(wave_plot_lib PRIVATE
-    ${FREETYPE_INCLUDE_DIRS}
-    ${GLFW_INCLUDE_DIRS}
-)
-
-target_link_libraries(wave_plot_lib PRIVATE
-    glfw
-    Freetype::Freetype
-    OpenGL::GL
-    pthread
-    dl
-)
-
-target_link_libraries(wave_plot_lib PRIVATE 
-    imgui
-    implot
-    glm
-    spdlog
-    xtensor
-)
-
-target_compile_options(wave_plot_lib PRIVATE -Wall -Wextra)
-# Only keep the line below if GLAD is being built as a shared (.so) library
-#target_compile_definitions(wave_plot_lib PRIVATE GLAD_GLAPI_EXPORT_BUILD)
-
-add_executable(wave_plot "${PROJECT_SOURCE_DIR}/src/wave_plot/main.cpp")
-target_link_libraries(wave_plot PRIVATE wave_plot_lib)
-target_link_libraries(wave_plot PRIVATE
-    glfw
-    Freetype::Freetype
-    OpenGL::GL
-    pthread
-    dl
-)
-target_link_libraries(wave_plot PRIVATE 
-    imgui
-    implot
-    glm
-    spdlog
-    xtensor
-)
+add_subdirectory(src/gl_lib)
+add_subdirectory(src/wave_plot)
