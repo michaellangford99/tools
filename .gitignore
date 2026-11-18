@@ -18,3 +18,4 @@ bin/*
 
 .cache/*
 .venv/*
+**/__pycache__/*
