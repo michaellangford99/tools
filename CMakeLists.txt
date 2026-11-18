@@ -13,6 +13,14 @@ find_package(glfw3)
 
 include(FetchContent)
 
+add_library(imgui_user_config INTERFACE)
+target_include_directories(imgui_user_config INTERFACE
+    "${PROJECT_SOURCE_DIR}/include"
+)
+target_compile_definitions(imgui_user_config INTERFACE
+    IMGUI_USER_CONFIG="custom_imconfig.h"
+)
+
 FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
@@ -39,7 +47,7 @@ target_include_directories(imgui PUBLIC
     ${imgui_SOURCE_DIR}/backends
 )
 
-target_link_libraries(imgui PUBLIC glfw)
+target_link_libraries(imgui PUBLIC glfw imgui_user_config)
 
 #---- ImGuiFileDialog ----
 
@@ -77,7 +85,7 @@ target_include_directories(implot PUBLIC
     ${implot_SOURCE_DIR}
 )
 
-target_link_libraries(implot PUBLIC imgui)
+target_link_libraries(implot PUBLIC imgui imgui_user_config)
 
 #---- GLM ----
 
