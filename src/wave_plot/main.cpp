@@ -1,0 +1,342 @@
+﻿#include "xtensor/reducers/xreducer.hpp"
+#include <cmath>
+#include <cstdio>
+#include <imgui.h>
+#include <backends/imgui_impl_glfw.h>
+#include <backends/imgui_impl_opengl3.h>
+#include <imgui_internal.h>
+
+#include <implot.h>
+
+#include <string>
+#include <vector>
+#include <map>
+#include <algorithm>
+#include <memory>
+
+#include <glad/glad.h> 
+#include <GLFW/glfw3.h>
+#include <iostream>
+#include <iomanip>
+
+#include <gl_lib/base_window.h>
+#include <xtensor/core/xmath.hpp>
+#include <xtensor/misc/xmanipulation.hpp>
+
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
+#include <istream>
+#include <fstream>
+#include <iostream>
+#include <xtensor.hpp>
+#include <xtensor/containers/xarray.hpp>
+#include <xtensor/io/xnpy.hpp>
+
+class wave_plot
+{
+public:
+	std::shared_ptr<base_window> g;
+
+
+
+	wave_plot(std::shared_ptr<base_window>  _wave_plot_window) : g(_wave_plot_window)
+	{
+		
+	}
+
+	void generate_imgui_windows()
+	{
+		// ImGUI window creation
+		ImGui::Begin("Settings");
+		// Ends the window
+		ImGui::End();
+
+		ImGui::ShowDemoWindow();
+		ImPlot::ShowDemoWindow();
+
+		// all primary window logic
+	}
+
+	//typedef int (*ImPlotFormatter)(double value, char* buff, int size, void* user_data);
+	// TODO: make more generic
+	static int SI_formatter(double value, char* buff, int size, void* user_data)
+	{
+		//sig_digits
+		int sig_digits = 4;
+
+		// assume user_data is the units
+		const char* unit = (const char*)user_data;
+
+		typedef struct {
+			double order;
+			const char* prefix;
+		} si_prefix_t;
+
+		si_prefix_t prefixes[] = {
+			{1e-15, "f"},
+			{1e-12, "p"},
+			{1e-9, "n"},
+			{1e-6, "µ"},
+			{1e-3, "m"},
+			{1e0, ""},
+			{1e3,"k"},
+			{1e6,"M"},
+			{1e9,"G"},
+			{1e12,"T"},
+			{1e15,"P"}
+		};
+
+		// bounds checks
+		if (value == 0.0 || !std::isfinite(value)) {
+			std::snprintf(buff, size, "%.*g %s", sig_digits, value, unit);
+			return 1;
+		}
+
+		double mag = std::fabs(value);
+		int chosen = 0;
+
+		for (int i = 0; i < (int)(sizeof(prefixes) / sizeof(prefixes[0])); i++)
+		{
+			if (mag >= prefixes[i].order && mag < prefixes[i].order*1e3)
+			{
+				chosen = i;
+				break;
+			}
+
+			if (mag < prefixes[0].order) {chosen=0; break;}
+			if (mag >= prefixes[(int)(sizeof(prefixes) / sizeof(prefixes[0])) - 1].order) { chosen = (int)(sizeof(prefixes) / sizeof(prefixes[0])) - 1; break;}
+		}
+
+		double scaled = value / prefixes[chosen].order;
+
+		std::snprintf(buff, size, "%.*g %s%s", sig_digits, scaled, prefixes[chosen].prefix, unit);
+
+		return 1;
+	}
+
+	void run()
+	{
+		//locals:
+		//...
+
+		// will probably have to replace with another loader
+		auto data = xt::load_npy<float>("output_array.npy");
+
+		
+		auto data_dB = xt::eval(xt::cast<double>(20*(xt::abs(data))));
+
+		auto x = xt::flatten(data);
+
+		auto shape = data.shape();
+
+		std::cout << data << std::endl;
+
+		for (auto& s : shape)
+			std::cout << s << std::endl;
+
+		while(!glfwWindowShouldClose(g->window))
+		{
+			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+			g->imgui_init();
+			generate_imgui_windows();
+
+			ImGui::Begin("plot settings");
+
+			ImGui::LabelText("RDM Settings", "");
+
+			static double heatmap_min=0.0f;
+			static double heatmap_max=1.0f;
+
+			
+			static int num_bins=100;
+			ImGui::InputScalar("Histogram Bin Count", ImGuiDataType_S32, &num_bins);
+
+			ImPlotSpec hist_spec;
+			//hist_spec.Flags |= ImPlotHistogramFlags_Horizontal;
+			//ImGui::SameLine();
+			if (ImPlot::BeginPlot("histogram", ImVec2(-1, 0), ImPlotFlags_Crosshairs))
+			{
+				ImPlot::PlotHistogram("histo test", data_dB.data(), shape[1]*shape[0], num_bins, 1.0, ImPlotRange(), hist_spec);
+				
+				ImPlot::DragLineX(0, &heatmap_min, ImVec4(1,0,0,1));
+				ImPlot::DragLineX(1, &heatmap_max, ImVec4(0,1,0,1));
+				
+				ImPlot::EndPlot();
+			}
+
+			// ImGui::SliderFloat("Heatmap Min", &heatmap_min, xt::amin(data_dB)(), heatmap_max);
+			// ImGui::SliderFloat("Heatmap Max", &heatmap_max, heatmap_min, xt::amax(data_dB)());
+
+			ImGui::End();
+
+
+			ImGui::Begin("test");
+
+			// plots:
+			// crosshairs
+			// stats overlay on right click
+			// units on x and y
+			// should only have Hzoom and Vzoom?
+			
+			// data table:
+			// 
+
+			// if (ImPlot::BeginPlot("Flattened XTensor Data", {-1,-1})) 
+			// {
+			// 	// Configure axes if needed
+			// 	ImPlot::SetupAxes("X-Index", "Value");
+
+			// 	// Pass the pointer to the first element of the contiguous array.
+			// 	// ImPlot will read 'total_elements' sequentially, effectively flattening it.
+			// 	// for (int i = 0; i < shape[0]; i+= 1)
+			// 	// {
+			// 	// 	ImPlotSpec spec;
+			// 	// 	//spec.Offset = i*shape[1]*sizeof(std::complex<double>);
+			// 	// 	//std::cout << "spec.Offset: " << spec.Offset << std::endl;
+			// 	// 	spec.Stride = sizeof(std::complex<double>);
+
+			// 	// 	spec.LineWeight = 0.2;
+			// 	// 	spec.FillAlpha = 0.1;
+
+			// 	// 	std::string label_real = "real PRI #" + std::to_string(i);
+			// 	// 	std::string label_imag = "imag PRI #" + std::to_string(i);
+				
+			// 	// 	ImPlot::PlotLine(label_real.c_str(), (double*)(data.data() + i*shape[1]), shape[1], 1, 0, spec);
+					
+			// 	// 	ImPlot::PlotLine(label_imag.c_str(), (double*)(data.data() + i*shape[1]) + 1, shape[1], 1, 0, spec);
+
+			// 	// }
+
+			// 	for (int i = 0; i < shape[0]; i+= 10)
+			// 	{
+			// 		ImPlotSpec spec;
+			// 		//spec.Offset = i*shape[1]*sizeof(std::complex<double>);
+			// 		//std::cout << "spec.Offset: " << spec.Offset << std::endl;
+			// 		spec.Stride = sizeof(double);
+
+			// 		spec.LineWeight = 0.2;
+			// 		spec.FillAlpha = 0.1;
+
+			// 		std::string label = "dB20 PRI #" + std::to_string(i);
+				
+			// 		ImPlot::PlotLine(label.c_str(), (data_dB.data() + i*shape[1]), shape[1], 1, 0, spec);
+
+			// 	}
+
+			// 	//ImPlot::PlotLine()
+
+			// 	ImPlot::EndPlot();
+
+
+			// }
+
+			ImPlot::PushColormap(ImPlotColormap_Viridis);
+
+			//TODO: need a unit formatter with SI prefix attachment
+
+			// static bool first_frame = true;
+
+			// if (first_frame) {
+			// 	ImPlot::SetNextAxisToFit(ImAxis_X1);
+			// 	ImPlot::SetNextAxisToFit(ImAxis_X2);
+			// 	ImPlot::SetNextAxisToFit(ImAxis_X3);
+			// 	first_frame = false;
+			// }
+
+
+			if (ImPlot::BeginPlot("2D heatmap", ImVec2(-1, ImGui::GetWindowHeight()), ImPlotFlags_Crosshairs)) {
+				ImPlot::SetupAxes("X", "Y");
+
+				ImPlot::SetupAxis(ImAxis_X1, "Bin index");
+				ImPlot::SetupAxis(ImAxis_X2, "Time [sec]", ImPlotAxisFlags_Lock);
+				ImPlot::SetupAxis(ImAxis_X3, "Range [m]");
+				ImPlot::SetupAxis(ImAxis_Y1, "Doppler");
+
+				// Same horizontal span, expressed in each axis's units:
+				ImPlot::SetupAxisLimits(ImAxis_X1, 0, shape[1]);
+				ImPlot::SetupAxisLimits(ImAxis_X2, 0, 1/3e8);
+				ImPlot::SetupAxisLimits(ImAxis_X3, 0, 1000);
+
+				// link all
+				static double x_min = 0;
+				static double x_max = 100.0;
+
+				//note - setting the axis links somehow needs to work differently so that the
+				//data stays in sync - the axis values will be different since the scales are different.
+				ImPlot::SetupAxisLinks(ImAxis_X3, &x_min, &x_max);
+				ImPlot::SetupAxisLinks(ImAxis_X2, &x_min, &x_max);
+				ImPlot::SetupAxisLinks(ImAxis_X1, &x_min, &x_max);
+
+
+				// ImPlot::Axis
+
+
+				ImPlot::SetupAxisFormat(ImAxis_X3, (ImPlotFormatter)SI_formatter, (void*)"m");
+				ImPlot::SetupAxisFormat(ImAxis_X2, (ImPlotFormatter)SI_formatter, (void*)"s");
+
+				ImPlot::PlotHeatmap(
+					"Value",
+					data_dB.data(),
+					shape[0],
+					shape[1],
+					heatmap_min,
+					heatmap_max,
+					"",
+					ImPlotPoint(0, 0),
+					ImPlotPoint(shape[1], shape[0]));
+
+				static double drag_y_val = 0;
+				ImPlot::DragLineY(0, &drag_y_val, ImVec4(1,0,0,1));
+
+				ImPlot::EndPlot();
+			}
+
+			ImPlot::PopColormap();
+
+			// ImPlotSpec hist_spec;
+			// hist_spec.Flags |= ImPlotHistogramFlags_Horizontal;
+			// ImGui::SameLine();
+			// if (ImPlot::BeginPlot("histogram", ImVec2(ImGui::GetWindowWidth()*0.3, ImGui::GetWindowHeight()), ImPlotFlags_Crosshairs))
+			// {
+			// 	ImPlot::PlotHistogram("histo test", data_dB.data(), shape[1]*shape[0], num_bins, 1.0, ImPlotRange(), hist_spec);
+			// 	ImPlot::EndPlot();
+			// }
+
+
+			//TODO probably use subplots here...
+			// Marginal plots with selectable reduction operator:
+			if (ImPlot::BeginPlot("Marginal Y", ImVec2(-1,0), ImPlotFlags_Crosshairs))
+			{
+				//auto marginal_y = data_dB
+				ImPlotSpec y_plot_spec;
+				y_plot_spec.Stride = data_dB.shape()[0];
+
+				ImPlot::PlotLine("marginal y", data_dB.data(), data_dB.shape()[1], 1, 0, y_plot_spec);
+				ImPlot::EndPlot();
+			}
+
+			//TODO after plotting marginals, optionally plot slices from the H/V bars
+			//Should be able to add a list of slices.
+
+			ImGui::End();
+
+			g->imgui_cleanup();
+
+			glfwSwapBuffers(g->window);
+			glfwPollEvents();
+		}
+	}
+
+};
+
+int main()
+{
+	std::shared_ptr<base_window> g = std::shared_ptr<base_window>(new base_window(800, 600));
+	wave_plot w = wave_plot(g);
+	w.run();
+	return 0;
+}
