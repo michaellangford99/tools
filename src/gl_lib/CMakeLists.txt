@@ -11,6 +11,7 @@ target_link_libraries(gl_lib
         glad
         glfw
         glm
+        stb_image
     PRIVATE
         OpenGL::GL
         imgui

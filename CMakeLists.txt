@@ -61,6 +61,12 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(imgui_file_dialog)
 target_link_libraries(ImGuiFileDialog PUBLIC imgui)
 
+#TODO: pull the repo myself
+add_library(stb_image INTERFACE)
+target_include_directories(stb_image INTERFACE
+    "${imgui_file_dialog_SOURCE_DIR}/stb"
+)
+
 #---- IMPlot ----
 
 FetchContent_Declare(

@@ -11,7 +11,6 @@ target_include_directories(wave_plot_lib PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${PROJECT_SOURCE_DIR}/include"
     "${PROJECT_SOURCE_DIR}/include/glad"
-    "${PROJECT_SOURCE_DIR}/include/stb_image"
     "${PROJECT_SOURCE_DIR}/include/KHR"
 )
 
