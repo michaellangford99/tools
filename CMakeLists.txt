@@ -148,5 +148,31 @@ target_link_libraries(glad PUBLIC
     ${CMAKE_DL_LIBS}
 )
 
+function(copy_glsl_files source_dir target)
+    file(GLOB_RECURSE GLSL_FILES CONFIGURE_DEPENDS
+        "${source_dir}/*.glsl"
+    )
+
+    set(GLSL_OUTPUTS)
+    foreach(GLSL_FILE IN LISTS GLSL_FILES)
+        file(RELATIVE_PATH GLSL_RELATIVE_PATH "${source_dir}" "${GLSL_FILE}")
+        set(OUTPUT_FILE "${CMAKE_CURRENT_BINARY_DIR}/${GLSL_RELATIVE_PATH}")
+        get_filename_component(OUTPUT_DIRECTORY "${OUTPUT_FILE}" DIRECTORY)
+
+        add_custom_command(
+            OUTPUT "${OUTPUT_FILE}"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${OUTPUT_DIRECTORY}"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                "${GLSL_FILE}" "${OUTPUT_FILE}"
+            DEPENDS "${GLSL_FILE}"
+            VERBATIM
+        )
+        list(APPEND GLSL_OUTPUTS "${OUTPUT_FILE}")
+    endforeach()
+
+    add_custom_target("${target}_glsl" DEPENDS ${GLSL_OUTPUTS})
+    add_dependencies("${target}" "${target}_glsl")
+endfunction()
+
 add_subdirectory(src/gl_lib)
 add_subdirectory(src/wave_plot)
