@@ -34,12 +34,14 @@
 #include <xtensor/containers/xarray.hpp>
 #include <xtensor/io/xnpy.hpp>
 
+#include "gpu_heatmap.h"
+
+#include <gl_lib/texture.h>
+
 class wave_plot
 {
 public:
 	std::shared_ptr<base_window> g;
-
-
 
 	wave_plot(std::shared_ptr<base_window>  _wave_plot_window) : g(_wave_plot_window)
 	{
@@ -125,7 +127,9 @@ public:
 		auto data = xt::load_npy<float>("output_array.npy");
 
 		
-		auto data_dB = xt::eval(xt::cast<double>(20*(xt::abs(data))));
+		auto data_dB = xt::eval(xt::cast<float>(20*(xt::abs(data))));
+
+		xt::view(data_dB, 10, xt::all()) = 90;
 
 		auto x = xt::flatten(data);
 
@@ -136,6 +140,13 @@ public:
 		for (auto& s : shape)
 			std::cout << s << std::endl;
 
+		gpu_heatmap* gpu_h = new gpu_heatmap();
+
+		// put these into a helper function
+		std::shared_ptr<texture> data_tex = std::shared_ptr<texture>(new texture(data_dB.data(), shape[0], shape[1], 1, 4, GL_RED, GL_R32F, GL_FLOAT));
+		std::shared_ptr<texture> heatmap_tex_out = std::shared_ptr<texture>(new texture(nullptr, shape[0], shape[1], 4, 2, GL_RGBA, GL_RGBA, GL_SHORT));
+		std::shared_ptr<framebuffer> heatmap_fb_out = std::shared_ptr<framebuffer>(new framebuffer(shape[0], shape[1], heatmap_tex_out));
+
 		while(!glfwWindowShouldClose(g->window))
 		{
 			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -144,7 +155,10 @@ public:
 			g->imgui_init();
 			generate_imgui_windows();
 
+
 			ImGui::Begin("plot settings");
+
+			gpu_h->colormap_shader->generate_imgui_editor();
 
 			ImGui::LabelText("RDM Settings", "");
 
@@ -246,7 +260,11 @@ public:
 			// 	ImPlot::SetNextAxisToFit(ImAxis_X3);
 			// 	first_frame = false;
 			// }
-
+			static double drag_y_val = 0;	
+			static double drag_x_val = 0;
+			
+			bool heatmap_hovered = false;
+			static ImPlotPoint heatmap_hover_pos = {0,0};
 
 			if (ImPlot::BeginPlot("2D heatmap", ImVec2(-1, ImGui::GetWindowHeight()), ImPlotFlags_Crosshairs)) {
 				ImPlot::SetupAxes("X", "Y");
@@ -278,19 +296,30 @@ public:
 				ImPlot::SetupAxisFormat(ImAxis_X3, (ImPlotFormatter)SI_formatter, (void*)"m");
 				ImPlot::SetupAxisFormat(ImAxis_X2, (ImPlotFormatter)SI_formatter, (void*)"s");
 
-				ImPlot::PlotHeatmap(
-					"Value",
-					data_dB.data(),
-					shape[0],
-					shape[1],
-					heatmap_min,
-					heatmap_max,
-					"",
-					ImPlotPoint(0, 0),
-					ImPlotPoint(shape[1], shape[0]));
+				// ImPlot::PlotHeatmap(
+				// 	"Value",
+				// 	data_dB.data(),
+				// 	shape[0],
+				// 	shape[1],
+				// 	heatmap_min,
+				// 	heatmap_max,
+				// 	"",
+				// 	ImPlotPoint(0, 0),
+				// 	ImPlotPoint(shape[1], shape[0]));
 
-				static double drag_y_val = 0;
+				gpu_h->reprocess(data_tex, heatmap_fb_out, heatmap_min, heatmap_max);
+
+				// image generator currently upside-downs the image
+				// this is because the data is loaded in opengl's bottom to top order -> flipping it.
+				// either flip it again here or in the generator, or at load time.
+				ImPlot::PlotImage("tex", heatmap_tex_out->gl_texture_id, ImPlotPoint(0, shape[1]), ImPlotPoint(shape[0], 0));
+
 				ImPlot::DragLineY(0, &drag_y_val, ImVec4(1,0,0,1));
+				ImPlot::DragLineX(1, &drag_x_val, ImVec4(0,0,1,1));
+
+				heatmap_hovered = ImPlot::IsPlotHovered();
+				if (heatmap_hovered)
+					heatmap_hover_pos = ImPlot::GetPlotMousePos();
 
 				ImPlot::EndPlot();
 			}
@@ -309,13 +338,45 @@ public:
 
 			//TODO probably use subplots here...
 			// Marginal plots with selectable reduction operator:
-			if (ImPlot::BeginPlot("Marginal Y", ImVec2(-1,0), ImPlotFlags_Crosshairs))
+			if (ImPlot::BeginPlot("Marginal Y", ImVec2(-1,100), ImPlotFlags_Crosshairs))
 			{
-				//auto marginal_y = data_dB
-				ImPlotSpec y_plot_spec;
-				y_plot_spec.Stride = data_dB.shape()[0];
+				static size_t y_idx = 0;
 
-				ImPlot::PlotLine("marginal y", data_dB.data(), data_dB.shape()[1], 1, 0, y_plot_spec);
+				if (heatmap_hovered)
+				{
+					y_idx = heatmap_hover_pos.y;
+				}
+				
+				if (y_idx >= 0 && y_idx < data_dB.shape()[0])
+				{
+					auto slice_1d = xt::view(data_dB, y_idx, xt::all());
+					
+					ImPlotSpec y_plot_spec;
+					y_plot_spec.Stride = int(slice_1d.strides()[0] * sizeof(float));
+
+					ImPlot::PlotLine("marginal y", slice_1d.data()+slice_1d.data_offset(), slice_1d.size(), 1, 0, y_plot_spec);
+				}
+				ImPlot::EndPlot();
+			}
+
+			if (ImPlot::BeginPlot("Marginal X", ImVec2(-1,100), ImPlotFlags_Crosshairs))
+			{
+				static size_t x_idx = 0;
+
+				if (heatmap_hovered)
+				{
+					x_idx = heatmap_hover_pos.x;
+				}
+
+				if (x_idx >= 0 && x_idx < data_dB.shape()[1])
+				
+					auto slice_1d = xt::view(data_dB, xt::all(), x_idx);
+					
+					ImPlotSpec x_plot_spec;
+					x_plot_spec.Stride = static_cast<int>(slice_1d.strides()[0] * sizeof(float));
+
+					ImPlot::PlotLine("marginal x", slice_1d.data()+slice_1d.data_offset(), slice_1d.size(), 1, 0, x_plot_spec);
+				}
 				ImPlot::EndPlot();
 			}
 
