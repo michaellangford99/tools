@@ -5,9 +5,6 @@
 #include <implot.h>
 #include <spdlog/spdlog.h>
 
-#define IMGUI_USER_CONFIG
-#define IMGUI_ENABLE_FREETYPE
-
 #include <vector>
 #include <map>
 #include <algorithm>
@@ -108,7 +105,7 @@ void base_window::setup_imgui(GLFWwindow* window)
 	static ImVector<ImWchar> ranges;
 	builder.BuildRanges(&ranges);
 
-	//io.Fonts->AddFontFromFileTTF("Ubuntu-R.ttf", 13, &imf, ranges.Data);
+	io.Fonts->AddFontFromFileTTF("assets/Ubuntu-R.ttf", 13, &imf, ranges.Data);
 
 	// Default to the dark palette; the app can flip via apply_theme(true).
 	apply_theme(false);

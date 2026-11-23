@@ -33,7 +33,10 @@ target_link_libraries(wave_plot_lib PRIVATE
     spdlog
     xtensor
     gl_lib
+    Freetype::Freetype
 )
+
+copy_glsl_files("${CMAKE_CURRENT_SOURCE_DIR}" wave_plot_lib)
 
 target_compile_options(wave_plot_lib PRIVATE -Wall -Wextra)
 # Only keep the line below if GLAD is being built as a shared (.so) library

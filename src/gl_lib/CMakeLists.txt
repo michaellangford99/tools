@@ -1,5 +1,9 @@
 add_library(gl_lib STATIC
     base_window.cpp
+    texture.cpp
+    framebuffer.cpp
+    triangles.cpp
+    shader.cpp
 )
 
 target_include_directories(gl_lib PUBLIC
@@ -17,4 +21,7 @@ target_link_libraries(gl_lib
         imgui
         implot
         spdlog
+        Freetype::Freetype
 )
+
+copy_glsl_files("${CMAKE_CURRENT_SOURCE_DIR}" gl_lib)

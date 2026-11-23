@@ -124,10 +124,10 @@ public:
 		//...
 
 		// will probably have to replace with another loader
-		auto data = xt::load_npy<float>("output_array.npy");
-
+		auto data = xt::load_npy<std::complex<double>>("test_data.npy");
 		
-		auto data_dB = xt::eval(xt::cast<float>(20*(xt::abs(data))));
+		auto data_dB = xt::eval(xt::cast<float>(20*xt::log10(xt::abs(data))));
+		data_dB = xt::where(xt::isnan(data_dB), -100.0f, data_dB);
 
 		xt::view(data_dB, 10, xt::all()) = 90;
 
@@ -140,12 +140,15 @@ public:
 		for (auto& s : shape)
 			std::cout << s << std::endl;
 
+		float data_min = xt::amin(data_dB)();
+		float data_max = xt::amax(data_dB)();
+
 		gpu_heatmap* gpu_h = new gpu_heatmap();
 
 		// put these into a helper function
-		std::shared_ptr<texture> data_tex = std::shared_ptr<texture>(new texture(data_dB.data(), shape[0], shape[1], 1, 4, GL_RED, GL_R32F, GL_FLOAT));
-		std::shared_ptr<texture> heatmap_tex_out = std::shared_ptr<texture>(new texture(nullptr, shape[0], shape[1], 4, 2, GL_RGBA, GL_RGBA, GL_SHORT));
-		std::shared_ptr<framebuffer> heatmap_fb_out = std::shared_ptr<framebuffer>(new framebuffer(shape[0], shape[1], heatmap_tex_out));
+		std::shared_ptr<texture> data_tex = std::shared_ptr<texture>(new texture(data_dB.data(), shape[1], shape[0], 1, 4, GL_RED, GL_R32F, GL_FLOAT));
+		std::shared_ptr<texture> heatmap_tex_out = std::shared_ptr<texture>(new texture(nullptr, shape[1], shape[0], 4, 2, GL_RGBA, GL_RGBA, GL_SHORT));
+		std::shared_ptr<framebuffer> heatmap_fb_out = std::shared_ptr<framebuffer>(new framebuffer(shape[1], shape[0], heatmap_tex_out));
 
 		while(!glfwWindowShouldClose(g->window))
 		{
@@ -172,212 +175,166 @@ public:
 			ImPlotSpec hist_spec;
 			//hist_spec.Flags |= ImPlotHistogramFlags_Horizontal;
 			//ImGui::SameLine();
+			ImPlot::SetNextAxisLinks(ImAxis_X1, nullptr, nullptr);
+			ImPlot::SetNextAxisLinks(ImAxis_Y1, nullptr, nullptr);
 			if (ImPlot::BeginPlot("histogram", ImVec2(-1, 0), ImPlotFlags_Crosshairs))
 			{
-				ImPlot::PlotHistogram("histo test", data_dB.data(), shape[1]*shape[0], num_bins, 1.0, ImPlotRange(), hist_spec);
+				ImPlot::PlotHistogram("histo test", data_dB.data(), shape[1]*shape[0], num_bins, 1.0, ImPlotRange());
 				
-				ImPlot::DragLineX(0, &heatmap_min, ImVec4(1,0,0,1));
-				ImPlot::DragLineX(1, &heatmap_max, ImVec4(0,1,0,1));
+				ImPlot::DragLineX(99990, &heatmap_min, ImVec4(1,0,0,1));
+				ImPlot::DragLineX(99991, &heatmap_max, ImVec4(0,1,0,1));
 				
 				ImPlot::EndPlot();
 			}
-
-			// ImGui::SliderFloat("Heatmap Min", &heatmap_min, xt::amin(data_dB)(), heatmap_max);
-			// ImGui::SliderFloat("Heatmap Max", &heatmap_max, heatmap_min, xt::amax(data_dB)());
-
 			ImGui::End();
-
 
 			ImGui::Begin("test");
 
-			// plots:
-			// crosshairs
-			// stats overlay on right click
-			// units on x and y
-			// should only have Hzoom and Vzoom?
-			
-			// data table:
-			// 
-
-			// if (ImPlot::BeginPlot("Flattened XTensor Data", {-1,-1})) 
-			// {
-			// 	// Configure axes if needed
-			// 	ImPlot::SetupAxes("X-Index", "Value");
-
-			// 	// Pass the pointer to the first element of the contiguous array.
-			// 	// ImPlot will read 'total_elements' sequentially, effectively flattening it.
-			// 	// for (int i = 0; i < shape[0]; i+= 1)
-			// 	// {
-			// 	// 	ImPlotSpec spec;
-			// 	// 	//spec.Offset = i*shape[1]*sizeof(std::complex<double>);
-			// 	// 	//std::cout << "spec.Offset: " << spec.Offset << std::endl;
-			// 	// 	spec.Stride = sizeof(std::complex<double>);
-
-			// 	// 	spec.LineWeight = 0.2;
-			// 	// 	spec.FillAlpha = 0.1;
-
-			// 	// 	std::string label_real = "real PRI #" + std::to_string(i);
-			// 	// 	std::string label_imag = "imag PRI #" + std::to_string(i);
-				
-			// 	// 	ImPlot::PlotLine(label_real.c_str(), (double*)(data.data() + i*shape[1]), shape[1], 1, 0, spec);
-					
-			// 	// 	ImPlot::PlotLine(label_imag.c_str(), (double*)(data.data() + i*shape[1]) + 1, shape[1], 1, 0, spec);
-
-			// 	// }
-
-			// 	for (int i = 0; i < shape[0]; i+= 10)
-			// 	{
-			// 		ImPlotSpec spec;
-			// 		//spec.Offset = i*shape[1]*sizeof(std::complex<double>);
-			// 		//std::cout << "spec.Offset: " << spec.Offset << std::endl;
-			// 		spec.Stride = sizeof(double);
-
-			// 		spec.LineWeight = 0.2;
-			// 		spec.FillAlpha = 0.1;
-
-			// 		std::string label = "dB20 PRI #" + std::to_string(i);
-				
-			// 		ImPlot::PlotLine(label.c_str(), (data_dB.data() + i*shape[1]), shape[1], 1, 0, spec);
-
-			// 	}
-
-			// 	//ImPlot::PlotLine()
-
-			// 	ImPlot::EndPlot();
-
-
-			// }
-
-			ImPlot::PushColormap(ImPlotColormap_Viridis);
-
-			//TODO: need a unit formatter with SI prefix attachment
-
-			// static bool first_frame = true;
-
-			// if (first_frame) {
-			// 	ImPlot::SetNextAxisToFit(ImAxis_X1);
-			// 	ImPlot::SetNextAxisToFit(ImAxis_X2);
-			// 	ImPlot::SetNextAxisToFit(ImAxis_X3);
-			// 	first_frame = false;
-			// }
 			static double drag_y_val = 0;	
 			static double drag_x_val = 0;
 			
 			bool heatmap_hovered = false;
 			static ImPlotPoint heatmap_hover_pos = {0,0};
 
-			if (ImPlot::BeginPlot("2D heatmap", ImVec2(-1, ImGui::GetWindowHeight()), ImPlotFlags_Crosshairs)) {
-				ImPlot::SetupAxes("X", "Y");
+			static float row_ratios[] = {0.8, 0.2};
+			static float col_ratios[] = {0.8, 0.2};
 
-				ImPlot::SetupAxis(ImAxis_X1, "Bin index");
-				ImPlot::SetupAxis(ImAxis_X2, "Time [sec]", ImPlotAxisFlags_Lock);
-				ImPlot::SetupAxis(ImAxis_X3, "Range [m]");
-				ImPlot::SetupAxis(ImAxis_Y1, "Doppler");
-
-				// Same horizontal span, expressed in each axis's units:
-				ImPlot::SetupAxisLimits(ImAxis_X1, 0, shape[1]);
-				ImPlot::SetupAxisLimits(ImAxis_X2, 0, 1/3e8);
-				ImPlot::SetupAxisLimits(ImAxis_X3, 0, 1000);
-
-				// link all
-				static double x_min = 0;
-				static double x_max = 100.0;
-
-				//note - setting the axis links somehow needs to work differently so that the
-				//data stays in sync - the axis values will be different since the scales are different.
-				ImPlot::SetupAxisLinks(ImAxis_X3, &x_min, &x_max);
-				ImPlot::SetupAxisLinks(ImAxis_X2, &x_min, &x_max);
-				ImPlot::SetupAxisLinks(ImAxis_X1, &x_min, &x_max);
-
-
-				// ImPlot::Axis
-
-
-				ImPlot::SetupAxisFormat(ImAxis_X3, (ImPlotFormatter)SI_formatter, (void*)"m");
-				ImPlot::SetupAxisFormat(ImAxis_X2, (ImPlotFormatter)SI_formatter, (void*)"s");
-
-				// ImPlot::PlotHeatmap(
-				// 	"Value",
-				// 	data_dB.data(),
-				// 	shape[0],
-				// 	shape[1],
-				// 	heatmap_min,
-				// 	heatmap_max,
-				// 	"",
-				// 	ImPlotPoint(0, 0),
-				// 	ImPlotPoint(shape[1], shape[0]));
-
-				gpu_h->reprocess(data_tex, heatmap_fb_out, heatmap_min, heatmap_max);
-
-				// image generator currently upside-downs the image
-				// this is because the data is loaded in opengl's bottom to top order -> flipping it.
-				// either flip it again here or in the generator, or at load time.
-				ImPlot::PlotImage("tex", heatmap_tex_out->gl_texture_id, ImPlotPoint(0, shape[1]), ImPlotPoint(shape[0], 0));
-
-				ImPlot::DragLineY(0, &drag_y_val, ImVec4(1,0,0,1));
-				ImPlot::DragLineX(1, &drag_x_val, ImVec4(0,0,1,1));
-
-				heatmap_hovered = ImPlot::IsPlotHovered();
-				if (heatmap_hovered)
-					heatmap_hover_pos = ImPlot::GetPlotMousePos();
-
-				ImPlot::EndPlot();
-			}
-
-			ImPlot::PopColormap();
-
-			// ImPlotSpec hist_spec;
-			// hist_spec.Flags |= ImPlotHistogramFlags_Horizontal;
-			// ImGui::SameLine();
-			// if (ImPlot::BeginPlot("histogram", ImVec2(ImGui::GetWindowWidth()*0.3, ImGui::GetWindowHeight()), ImPlotFlags_Crosshairs))
-			// {
-			// 	ImPlot::PlotHistogram("histo test", data_dB.data(), shape[1]*shape[0], num_bins, 1.0, ImPlotRange(), hist_spec);
-			// 	ImPlot::EndPlot();
-			// }
-
-
-			//TODO probably use subplots here...
-			// Marginal plots with selectable reduction operator:
-			if (ImPlot::BeginPlot("Marginal Y", ImVec2(-1,100), ImPlotFlags_Crosshairs))
+			ImPlotSubplotFlags flags = ImPlotSubplotFlags_LinkRows | ImPlotSubplotFlags_LinkCols;
+			if (ImPlot::BeginSubplots("linked rdm", 2, 2, {-1,1000}, flags, row_ratios, col_ratios))
 			{
+				ImPlot::PushColormap(ImPlotColormap_Viridis);
+
+				if (ImPlot::BeginPlot("2D heatmap", ImVec2(-1, 0), ImPlotFlags_Crosshairs))
+				{
+					ImPlot::SetupAxes("X", "Y");
+
+					ImPlot::SetupAxis(ImAxis_X1, "Bin index");
+					// ImPlot::SetupAxis(ImAxis_X2, "Time [sec]", ImPlotAxisFlags_Lock);
+					// ImPlot::SetupAxis(ImAxis_X3, "Range [m]");
+					// ImPlot::SetupAxis(ImAxis_Y1, "Doppler");
+
+					// Same horizontal span, expressed in each axis's units:
+					// ImPlot::SetupAxisLimits(ImAxis_X1, 0, shape[1]);
+					// ImPlot::SetupAxisLimits(ImAxis_X2, 0, 1/3e8);
+					// ImPlot::SetupAxisLimits(ImAxis_X3, 0, 1000);
+
+					// link all
+					static double x_min = 0;
+					static double x_max = 100.0;
+
+					//note - setting the axis links somehow needs to work differently so that the
+					//data stays in sync - the axis values will be different since the scales are different.
+					// ImPlot::SetupAxisLinks(ImAxis_X3, &x_min, &x_max);
+					// ImPlot::SetupAxisLinks(ImAxis_X2, &x_min, &x_max);
+					// ImPlot::SetupAxisLinks(ImAxis_X1, &x_min, &x_max);
+
+					// ImPlot::SetupAxisFormat(ImAxis_X3, (ImPlotFormatter)SI_formatter, (void*)"m");
+					// ImPlot::SetupAxisFormat(ImAxis_X2, (ImPlotFormatter)SI_formatter, (void*)"s");
+
+					gpu_h->reprocess(data_tex, heatmap_fb_out, heatmap_min, heatmap_max);
+
+					// image generator currently upside-downs the image
+					// this is because the data is loaded in opengl's bottom to top order -> flipping it.
+					// either flip it again here or in the generator, or at load time.
+					ImPlot::PlotImage("tex", heatmap_tex_out->gl_texture_id, ImPlotPoint(0, shape[0]), ImPlotPoint(shape[1], 0));
+					//TODO: add no legend
+
+					heatmap_hovered = ImPlot::IsPlotHovered();
+					if (heatmap_hovered)
+						heatmap_hover_pos = ImPlot::GetPlotMousePos();
+
+					ImPlot::EndPlot();
+				}
+
+				ImPlot::PopColormap();
+
+				// ImPlotSpec hist_spec;
+				// hist_spec.Flags |= ImPlotHistogramFlags_Horizontal;
+				// ImGui::SameLine();
+				// if (ImPlot::BeginPlot("histogram", ImVec2(ImGui::GetWindowWidth()*0.3, ImGui::GetWindowHeight()), ImPlotFlags_Crosshairs))
+				// {
+				// 	ImPlot::PlotHistogram("histo test", data_dB.data(), shape[1]*shape[0], num_bins, 1.0, ImPlotRange(), hist_spec);
+				// 	ImPlot::EndPlot();
+				// }
+				static size_t x_idx = 0;
 				static size_t y_idx = 0;
 
 				if (heatmap_hovered)
 				{
+					x_idx = heatmap_hover_pos.x;
 					y_idx = heatmap_hover_pos.y;
 				}
-				
-				if (y_idx >= 0 && y_idx < data_dB.shape()[0])
+
+				//TODO probably use subplots here...
+				// Marginal plots with selectable reduction operator:
+				if (ImPlot::BeginPlot("Marginal Y", ImVec2(-1,100), ImPlotFlags_Crosshairs))
 				{
-					auto slice_1d = xt::view(data_dB, y_idx, xt::all());
+					ImPlot::SetupAxisLimits(ImAxis_X1, data_min, data_max);
 					
-					ImPlotSpec y_plot_spec;
-					y_plot_spec.Stride = int(slice_1d.strides()[0] * sizeof(float));
+					if (x_idx >= 0 && x_idx < data_dB.shape()[1])
+					{
+						auto slice_1d = xt::view(data_dB, xt::all(), x_idx);
+						auto y_axis = xt::arange<float>(slice_1d.size());
+						
+						// ImPlotSpec y_plot_spec;
+						// y_plot_spec.Stride = int(slice_1d.strides()[0] * sizeof(float));
+						// ImPlot::PlotLine("marginal y", slice_1d.data()+slice_1d.data_offset(), xs.data(), slice_1d.size(), 1, 0, y_plot_spec);
+					
+						struct vert_slice {
+							const xt::xarray<float>& values;  // Plotted along the horizontal X-axis
+							const xt::xarray<float>& y_coords; // Plotted along the vertical Y-axis
+						};
 
-					ImPlot::PlotLine("marginal y", slice_1d.data()+slice_1d.data_offset(), slice_1d.size(), 1, 0, y_plot_spec);
+						vert_slice plot_data{ slice_1d, y_axis };
+
+						auto getter = [](int idx, void* user_data) -> ImPlotPoint {
+							vert_slice* d = static_cast<vert_slice*>(user_data);
+							return ImPlotPoint(d->values(idx), d->y_coords(idx));
+						};
+
+						ImPlot::PlotLineG("marginal y", getter, &plot_data, static_cast<int>(slice_1d.size()));
+					
+						float h_lines[] = {float(y_idx)};
+						ImPlotSpec h_line_spec;
+						h_line_spec.Flags |= ImPlotInfLinesFlags_Horizontal;
+						h_line_spec.Flags |= ImPlotItemFlags_NoLegend;
+						h_line_spec.LineColor = {0.8,0.8,0.8,1};
+						h_line_spec.LineWeight = 0.1;
+						ImPlot::PlotInfLines("crosshairs", h_lines, 1, h_line_spec);
+					}
+					ImPlot::EndPlot();
 				}
-				ImPlot::EndPlot();
-			}
 
-			if (ImPlot::BeginPlot("Marginal X", ImVec2(-1,100), ImPlotFlags_Crosshairs))
-			{
-				static size_t x_idx = 0;
-
-				if (heatmap_hovered)
+				if (ImPlot::BeginPlot("Marginal X", ImVec2(-1,100), ImPlotFlags_Crosshairs))
 				{
-					x_idx = heatmap_hover_pos.x;
-				}
+					// may want to set 'always' later
+					ImPlot::SetupAxisLimits(ImAxis_Y1, data_min, data_max);
 
-				if (x_idx >= 0 && x_idx < data_dB.shape()[1])
+					if (y_idx >= 0 && y_idx < data_dB.shape()[0])
+					{
+						auto slice_1d = xt::view(data_dB, y_idx, xt::all());
+						
+						ImPlotSpec x_plot_spec;
+						x_plot_spec.Stride = static_cast<int>(slice_1d.strides()[0] * sizeof(float));
+						x_plot_spec.LineColor = {0.8,0.2,0.1,0.6};
+						ImPlot::PlotLine("marginal x", slice_1d.data()+slice_1d.data_offset(), slice_1d.size(), 1, 0, x_plot_spec);
+						
+						float v_lines[] = {float(x_idx)};
+						ImPlotSpec v_line_spec;
+						v_line_spec.Flags |= ImPlotItemFlags_NoLegend;
+						v_line_spec.LineColor = {0.8,0.8,0.8,1};
+						v_line_spec.LineWeight = 0.1;
+						ImPlot::PlotInfLines("crosshairs", v_lines, 1, v_line_spec);
+					}
+					ImPlot::EndPlot();
+				}
+				ImPlot::EndSubplots();
 				
-					auto slice_1d = xt::view(data_dB, xt::all(), x_idx);
-					
-					ImPlotSpec x_plot_spec;
-					x_plot_spec.Stride = static_cast<int>(slice_1d.strides()[0] * sizeof(float));
+				ImPlot::SetNextAxisLinks(ImAxis_X1, nullptr, nullptr);
+				ImPlot::SetNextAxisLinks(ImAxis_Y1, nullptr, nullptr);
 
-					ImPlot::PlotLine("marginal x", slice_1d.data()+slice_1d.data_offset(), slice_1d.size(), 1, 0, x_plot_spec);
-				}
-				ImPlot::EndPlot();
+				ImGui::SameLine();
+				ImGui::LabelText("test text", "");
 			}
 
 			//TODO after plotting marginals, optionally plot slices from the H/V bars

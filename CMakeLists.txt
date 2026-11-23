@@ -9,7 +9,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(Freetype REQUIRED)
 find_package(OpenGL REQUIRED)
-find_package(glfw3)
+find_package(glfw3 REQUIRED)
+find_package(Freetype REQUIRED)
 
 include(FetchContent)
 
@@ -40,6 +41,7 @@ target_sources(imgui PRIVATE
 target_sources(imgui PRIVATE
     ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+    ${imgui_SOURCE_DIR}/misc/freetype/imgui_freetype.cpp
 )
 
 target_include_directories(imgui PUBLIC 
@@ -47,7 +49,7 @@ target_include_directories(imgui PUBLIC
     ${imgui_SOURCE_DIR}/backends
 )
 
-target_link_libraries(imgui PUBLIC glfw imgui_user_config)
+target_link_libraries(imgui PUBLIC glfw imgui_user_config Freetype::Freetype)
 
 #---- ImGuiFileDialog ----
 
@@ -59,7 +61,7 @@ FetchContent_Declare(
 )
 
 FetchContent_MakeAvailable(imgui_file_dialog)
-target_link_libraries(ImGuiFileDialog PUBLIC imgui)
+target_link_libraries(ImGuiFileDialog PUBLIC imgui Freetype::Freetype)
 
 #TODO: pull the repo myself
 add_library(stb_image INTERFACE)
@@ -91,7 +93,7 @@ target_include_directories(implot PUBLIC
     ${implot_SOURCE_DIR}
 )
 
-target_link_libraries(implot PUBLIC imgui imgui_user_config)
+target_link_libraries(implot PUBLIC imgui imgui_user_config Freetype::Freetype)
 
 #---- GLM ----
 
@@ -176,3 +178,4 @@ endfunction()
 
 add_subdirectory(src/gl_lib)
 add_subdirectory(src/wave_plot)
+add_subdirectory(src/ocean_model)
