@@ -24,9 +24,9 @@ class ocean_time_domain
 
     std::shared_ptr<shader> ocean_time_domain_shader;
     std::shared_ptr<framebuffer> ocean_time_domain_fb;
-    std::shared_ptr<framebuffer> ocean_time_domain_tex;
+    std::shared_ptr<texture> ocean_time_domain_tex;
 
-    ocean_spectrum();
+    ocean_time_domain(int Nx, int Ny);
     void compute_spectrum_realization(std::shared_ptr<texture> ocean_spectrum_realization_tex,
                                       float time_s);
-}
+};

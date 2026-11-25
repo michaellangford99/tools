@@ -52,12 +52,16 @@ public:
 	{
 		ocean_spectrum spec = ocean_spectrum(2048, 2048);
 
+		ocean_time_domain td = ocean_time_domain(2048, 2048);
+		float t = 0.0f;
 		while(!glfwWindowShouldClose(g->window))
 		{
+			t += 1.0f/60.0f;
 			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 			spec.generate_spectrum();
+			td.compute_spectrum_realization(spec.ocean_spectrum_tex, t);
 
 			g->imgui_init();
 			generate_imgui_windows();
@@ -65,8 +69,10 @@ public:
 			ImGui::Begin("test wind");
 
 			spec.ocean_spectrum_shader->generate_imgui_editor();
-
 			ImGui::Image(spec.ocean_spectrum_tex->gl_texture_id, {float(spec.ocean_spectrum_tex->width), float(spec.ocean_spectrum_tex->height)});
+			
+			td.ocean_time_domain_shader->generate_imgui_editor();
+			ImGui::Image(td.ocean_time_domain_tex->gl_texture_id, {float(td.ocean_time_domain_tex->width), float(td.ocean_time_domain_tex->height)});
 
 			ImGui::End();
 

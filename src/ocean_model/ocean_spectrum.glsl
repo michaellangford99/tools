@@ -6,7 +6,10 @@ out vec4 FragColor;
 in vec2 TexCoord;
 
 uniform vec2 k_wind_vector;
-uniform float omega_max;
+uniform float k_max;
+
+// gravity, [m/sec^2]
+#define g 9.81f
 
 //TODO add noise texture input,
 // or generate it ourself
@@ -23,9 +26,6 @@ float S_jonswap(float omega, float k_wind_speed)
 
     // 'Fetch' or distance from lee shore [m]
     float F = 10000;
-
-    // gravity, [m/sec^2]
-    float g = 9.81;
 
     // coefficients
     float alpha = 0.076*pow(U_10*U_10/(F*g), 0.22);
@@ -52,20 +52,37 @@ float S_jonswap(float omega, float k_wind_speed)
 //     return S;
 // }
 
-float J_omega_to_k()
+// S(w)dw = S(k)dk
+// S(k) = S(w)dw / dk
+// w^2 = gk
+// 2w = g
+float dw_over_dk(float omega)
+{
+    return 2.0f*omega/g;
+}
+
+float k_to_omega(float k)
 {
     // use dispersion relation
-    
+    float omega = sqrt(g*k);
+    return omega;
 }
 
 void main()
 {
-    vec2 omega = omega_max * (2.0f*TexCoord-1.0f);
+    vec2 k = k_max * (2.0f*TexCoord-1.0f);
+    vec2 u_k = normalize(k);
 
-    vec2 u_omega = normalize(omega);
+    vec2 omega = u_k*k_to_omega(length(k));
+
+    vec2 u_omega = u_k;
     vec2 u_k_wind_vector = normalize(k_wind_vector);
 
-    float S = S_jonswap(length(omega), length(k_wind_vector))*pow(abs(dot(u_omega, u_k_wind_vector)), 1);
+    float S_omega = S_jonswap(length(omega), length(k_wind_vector))*pow(abs(dot(u_omega, u_k_wind_vector)), 1);
+    float S_k = S_omega * dw_over_dk(length(omega));
+
+    // I believe S_w is a one-sided spectrum...
+    // need to handle the nyquist and 0 frequency correctly though.
 
     // I figure it's best to represent a complex spectrum that's a generated
     // realization of a power spectrum  w the assumption that the underlying 
@@ -74,7 +91,9 @@ void main()
     vec2 unif_rand = hash22(TexCoord);
     vec2 gaussian_2d = box_muller(unif_rand);
 
-    vec2 amplitude = sqrt(S) * gaussian_2d;
+    vec2 cx_circ_gaussian = gaussian_2d / sqrt(2.0f);
 
-    FragColor = vec4(amplitude, 0, 1);
+    vec2 amplitude = sqrt(S_k / 2.0f) * cx_circ_gaussian;
+
+    FragColor = vec4(amplitude*1000.0f, 0, 1);
 }
